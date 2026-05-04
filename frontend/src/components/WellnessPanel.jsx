@@ -11,10 +11,10 @@ export default function WellnessPanel({ wellness }) {
   const data = [...wellness]
     .sort((a, b) => (a.id ?? "").localeCompare(b.id ?? ""))
     .map((w) => ({
-      date: w.id?.slice(5) ?? "",  // "MM-DD"
+      date: w.id?.slice(5) ?? "",
       CTL: w.ctl != null ? Math.round(w.ctl) : null,
       ATL: w.atl != null ? Math.round(w.atl) : null,
-      TSB: w.tsb != null ? Math.round(w.tsb) : null,
+      TSB: w.ctl != null && w.atl != null ? Math.round(w.ctl - w.atl) : null,
     }));
 
   const tooltipStyle = {

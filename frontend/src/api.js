@@ -30,6 +30,17 @@ export const api = {
   },
   getActivity: (athleteId, activityId) =>
     req(`/athletes/${athleteId}/activities/${activityId}`),
-  getWellness: (id) => req(`/athletes/${id}/wellness`),
+  syncAthlete: (id, oldest, newest) =>
+    req(`/athletes/${id}/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ oldest, newest }),
+    }),
+  getWellness: (id, oldest, newest) => {
+    const params = new URLSearchParams();
+    if (oldest) params.set("oldest", oldest);
+    if (newest) params.set("newest", newest);
+    return req(`/athletes/${id}/wellness?${params}`);
+  },
   getEvents: (id) => req(`/athletes/${id}/events`),
 };

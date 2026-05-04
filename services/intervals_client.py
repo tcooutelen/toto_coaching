@@ -73,7 +73,10 @@ class IntervalsClient:
 
     def get_activity(self, activity_id: str) -> dict:
         """Détail complet d'une activité (laps, métriques pace/puissance)."""
-        return self._get(f"/athlete/{self.athlete_id}/activities/{activity_id}")
+        result = self._get(f"/athlete/{self.athlete_id}/activities/{activity_id}")
+        if isinstance(result, list):
+            return result[0] if result else {}
+        return result
 
     def get_pmc(
         self,

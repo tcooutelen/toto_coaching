@@ -17,5 +17,5 @@ def get_db():
 
 
 def init_db():
-    from models import athlete  # noqa: F401
+    from models import athlete, activity, wellness  # noqa: F401
     Base.metadata.create_all(bind=engine)

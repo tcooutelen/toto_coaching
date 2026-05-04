@@ -11,7 +11,7 @@ function offsetDate(days) {
 }
 
 export default function RefreshModal({ onConfirm, onClose }) {
-  const [oldest, setOldest] = useState(offsetDate(-6));
+  const [oldest, setOldest] = useState(offsetDate(-90));
   const [newest, setNewest] = useState(todayStr());
   const [error, setError] = useState(null);
 

@@ -100,9 +100,9 @@ export default function ActivityModal({ athleteId, activity, onClose }) {
               <StatBox label="TSS" value={detail.icu_training_load ?? detail.tss} />
               {isCycling && (
                 <>
-                  <StatBox label="Puissance moy." value={detail.average_watts ? detail.average_watts + " W" : null} />
-                  <StatBox label="Puissance norm." value={detail.normalized_power ? detail.normalized_power + " W" : null} />
-                  <StatBox label="IF" value={detail.intensity_factor ? detail.intensity_factor.toFixed(2) : null} />
+                  <StatBox label="Puissance moy." value={(detail.icu_average_watts ?? detail.average_watts) ? (detail.icu_average_watts ?? detail.average_watts) + " W" : null} />
+                  <StatBox label="Puissance norm." value={(detail.icu_weighted_avg_watts ?? detail.normalized_power) ? (detail.icu_weighted_avg_watts ?? detail.normalized_power) + " W" : null} />
+                  <StatBox label="IF" value={(detail.icu_intensity ?? detail.intensity_factor) ? (detail.icu_intensity ?? detail.intensity_factor).toFixed(2) : null} />
                   <StatBox label="Vitesse moy." value={mpsToKmh(detail.average_speed) ? mpsToKmh(detail.average_speed) + " km/h" : null} />
                 </>
               )}

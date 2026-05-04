@@ -17,19 +17,22 @@ export default function AthleteDetail({ athlete }) {
   const [activities, setActivities] = useState([]);
   const [wellness, setWellness] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
   const [showRefresh, setShowRefresh] = useState(false);
+  const [hasData, setHasData] = useState(null);
 
-  const fetchData = useCallback((oldest, newest) => {
+  const fetchLocal = useCallback((oldest, newest) => {
     setError(null);
     setLoading(true);
     Promise.all([
       api.getActivities(athlete.id, oldest, newest),
-      api.getWellness(athlete.id),
+      api.getWellness(athlete.id, oldest, newest),
     ])
       .then(([acts, well]) => {
         setActivities(acts);
         setWellness(well);
+        setHasData(acts.length > 0 || well.length > 0);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -38,20 +41,31 @@ export default function AthleteDetail({ athlete }) {
   useEffect(() => {
     setActivities([]);
     setWellness([]);
-    fetchData(offsetDate(-6), offsetDate(0));
-  }, [athlete.id, fetchData]);
+    setHasData(null);
+    fetchLocal(offsetDate(-365), offsetDate(0));
+  }, [athlete.id, fetchLocal]);
 
-  function handleRefresh(oldest, newest) {
+  async function handleRefresh(oldest, newest) {
     setShowRefresh(false);
-    fetchData(oldest, newest);
+    setError(null);
+    setSyncing(true);
+    try {
+      await api.syncAthlete(athlete.id, oldest, newest);
+      fetchLocal(oldest, newest);
+    } catch (err) {
+      setError(err.message);
+      setSyncing(false);
+    } finally {
+      setSyncing(false);
+    }
   }
 
   return (
     <div className="athlete-detail">
       <div className="detail-header">
         <h2>{athlete.name}</h2>
-        <button className="btn-refresh" onClick={() => setShowRefresh(true)}>
-          ↻ Rafraîchir
+        <button className="btn-refresh" onClick={() => setShowRefresh(true)} disabled={syncing}>
+          {syncing ? "Synchronisation…" : "↻ Rafraîchir"}
         </button>
       </div>
 
@@ -67,13 +81,19 @@ export default function AthleteDetail({ athlete }) {
         ))}
       </div>
 
-      {loading && <p className="loading">Chargement...</p>}
+      {(loading || syncing) && <p className="loading">{syncing ? "Synchronisation en cours…" : "Chargement…"}</p>}
       {error && <p className="error">Erreur : {error}</p>}
 
-      {!loading && !error && tab === "Activités" && (
+      {!loading && !syncing && !error && hasData === false && (
+        <div className="no-data-hint">
+          <p>Aucune donnée en base. Clique sur <strong>↻ Rafraîchir</strong> pour importer depuis intervals.icu.</p>
+        </div>
+      )}
+
+      {!loading && !syncing && !error && hasData && tab === "Activités" && (
         <ActivityList athleteId={athlete.id} activities={activities} />
       )}
-      {!loading && !error && tab === "Wellness" && (
+      {!loading && !syncing && !error && hasData && tab === "Wellness" && (
         <WellnessPanel wellness={wellness} />
       )}
 
