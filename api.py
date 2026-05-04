@@ -16,7 +16,7 @@ app = FastAPI(title="TotoCoaching API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -69,6 +69,24 @@ def list_athletes(db: Session = Depends(get_db)):
 def create_athlete(payload: AthleteCreate, db: Session = Depends(get_db)):
     athlete = Athlete(**payload.model_dump())
     db.add(athlete)
+    db.commit()
+    db.refresh(athlete)
+    return athlete
+
+
+class AthleteUpdate(BaseModel):
+    name: Optional[str] = None
+    intervals_athlete_id: Optional[str] = None
+    intervals_api_key: Optional[str] = None
+
+
+@app.patch("/athletes/{athlete_id}", response_model=AthleteOut)
+def update_athlete(athlete_id: int, payload: AthleteUpdate, db: Session = Depends(get_db)):
+    athlete = get_athlete_or_404(athlete_id, db)
+    for field, value in payload.model_dump(exclude_none=True).items():
+        if field == "intervals_api_key" and value == "":
+            continue
+        setattr(athlete, field, value)
     db.commit()
     db.refresh(athlete)
     return athlete

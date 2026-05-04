@@ -88,17 +88,29 @@ body {
   color: #7c8cff;
 }
 
-.btn-delete {
+.athlete-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.btn-icon {
   background: none;
   border: none;
   color: #475569;
   cursor: pointer;
-  font-size: 12px;
-  padding: 2px 4px;
+  font-size: 13px;
+  padding: 2px 5px;
+  border-radius: 4px;
 }
 
-.btn-delete:hover {
+.btn-icon:hover {
+  color: #e2e8f0;
+  background: #2d3148;
+}
+
+.btn-icon-delete:hover {
   color: #ef4444;
+  background: transparent;
 }
 
 /* ── Main ── */
@@ -118,7 +130,6 @@ body {
 
 .athlete-detail h2 {
   font-size: 22px;
-  margin-bottom: 20px;
   color: #f1f5f9;
 }
 
@@ -377,6 +388,80 @@ body {
 
 .lap-table-wrap {
   overflow-x: auto;
+}
+
+/* ── Detail header ── */
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.detail-header h2 {
+  margin-bottom: 0;
+}
+
+.btn-refresh {
+  background: #232640;
+  border: 1px solid #2d3148;
+  color: #94a3b8;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-refresh:hover {
+  background: #2d3148;
+  color: #e2e8f0;
+}
+
+/* ── Primary button ── */
+.btn-primary {
+  background: #7c8cff !important;
+  color: #fff !important;
+}
+
+.btn-primary:hover {
+  background: #5a6ef0 !important;
+}
+
+/* ── Refresh modal ── */
+.refresh-hint {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+.refresh-fields {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.refresh-fields label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.refresh-fields input[type="date"] {
+  background: #0f1117;
+  border: 1px solid #2d3148;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #e2e8f0;
+  font-size: 14px;
+  color-scheme: dark;
+}
+
+.refresh-fields input[type="date"]:focus {
+  outline: none;
+  border-color: #7c8cff;
 }
 
 /* ── Wellness charts ── */

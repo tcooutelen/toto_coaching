@@ -1,9 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../api";
 import ActivityList from "./ActivityList";
 import WellnessPanel from "./WellnessPanel";
+import RefreshModal from "./RefreshModal";
 
 const TABS = ["Activités", "Wellness"];
+
+function offsetDate(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 export default function AthleteDetail({ athlete }) {
   const [tab, setTab] = useState("Activités");
@@ -11,15 +18,13 @@ export default function AthleteDetail({ athlete }) {
   const [wellness, setWellness] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showRefresh, setShowRefresh] = useState(false);
 
-  useEffect(() => {
-    setActivities([]);
-    setWellness([]);
+  const fetchData = useCallback((oldest, newest) => {
     setError(null);
     setLoading(true);
-
     Promise.all([
-      api.getActivities(athlete.id),
+      api.getActivities(athlete.id, oldest, newest),
       api.getWellness(athlete.id),
     ])
       .then(([acts, well]) => {
@@ -30,9 +35,25 @@ export default function AthleteDetail({ athlete }) {
       .finally(() => setLoading(false));
   }, [athlete.id]);
 
+  useEffect(() => {
+    setActivities([]);
+    setWellness([]);
+    fetchData(offsetDate(-6), offsetDate(0));
+  }, [athlete.id, fetchData]);
+
+  function handleRefresh(oldest, newest) {
+    setShowRefresh(false);
+    fetchData(oldest, newest);
+  }
+
   return (
     <div className="athlete-detail">
-      <h2>{athlete.name}</h2>
+      <div className="detail-header">
+        <h2>{athlete.name}</h2>
+        <button className="btn-refresh" onClick={() => setShowRefresh(true)}>
+          ↻ Rafraîchir
+        </button>
+      </div>
 
       <div className="tabs">
         {TABS.map((t) => (
@@ -54,6 +75,13 @@ export default function AthleteDetail({ athlete }) {
       )}
       {!loading && !error && tab === "Wellness" && (
         <WellnessPanel wellness={wellness} />
+      )}
+
+      {showRefresh && (
+        <RefreshModal
+          onConfirm={handleRefresh}
+          onClose={() => setShowRefresh(false)}
+        />
       )}
     </div>
   );

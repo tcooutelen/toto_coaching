@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import AthleteList from "./components/AthleteList";
 import AthleteDetail from "./components/AthleteDetail";
 import AddAthleteModal from "./components/AddAthleteModal";
+import EditAthleteModal from "./components/EditAthleteModal";
 import { api } from "./api";
 import "./App.css";
 
@@ -9,6 +10,7 @@ export default function App() {
   const [athletes, setAthletes] = useState([]);
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   useEffect(() => {
     api.getAthletes().then(setAthletes).catch(console.error);
@@ -18,6 +20,13 @@ export default function App() {
     const athlete = await api.createAthlete(data);
     setAthletes((prev) => [...prev, athlete]);
     setShowAdd(false);
+  }
+
+  async function handleEdit(id, data) {
+    const updated = await api.updateAthlete(id, data);
+    setAthletes((prev) => prev.map((a) => (a.id === id ? updated : a)));
+    if (selected?.id === id) setSelected(updated);
+    setEditing(null);
   }
 
   async function handleDelete(id) {
@@ -39,6 +48,7 @@ export default function App() {
           athletes={athletes}
           selected={selected}
           onSelect={setSelected}
+          onEdit={setEditing}
           onDelete={handleDelete}
         />
       </aside>
@@ -55,6 +65,13 @@ export default function App() {
 
       {showAdd && (
         <AddAthleteModal onSave={handleAdd} onClose={() => setShowAdd(false)} />
+      )}
+      {editing && (
+        <EditAthleteModal
+          athlete={editing}
+          onSave={handleEdit}
+          onClose={() => setEditing(null)}
+        />
       )}
     </div>
   );

@@ -15,6 +15,12 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     }),
+  updateAthlete: (id, data) =>
+    req(`/athletes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
   deleteAthlete: (id) => req(`/athletes/${id}`, { method: "DELETE" }),
   getActivities: (id, oldest, newest) => {
     const params = new URLSearchParams();

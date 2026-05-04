@@ -1,4 +1,4 @@
-export default function AthleteList({ athletes, selected, onSelect, onDelete }) {
+export default function AthleteList({ athletes, selected, onSelect, onEdit, onDelete }) {
   if (athletes.length === 0) {
     return <p className="no-athletes">Aucun athlète. Clique sur + Athlète.</p>;
   }
@@ -12,15 +12,28 @@ export default function AthleteList({ athletes, selected, onSelect, onDelete }) 
           onClick={() => onSelect(a)}
         >
           <span className="athlete-name">{a.name}</span>
-          <button
-            className="btn-delete"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm(`Supprimer ${a.name} ?`)) onDelete(a.id);
-            }}
-          >
-            ✕
-          </button>
+          <div className="athlete-actions">
+            <button
+              className="btn-icon"
+              title="Modifier"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(a);
+              }}
+            >
+              ✎
+            </button>
+            <button
+              className="btn-icon btn-icon-delete"
+              title="Supprimer"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm(`Supprimer ${a.name} ?`)) onDelete(a.id);
+              }}
+            >
+              ✕
+            </button>
+          </div>
         </li>
       ))}
     </ul>
