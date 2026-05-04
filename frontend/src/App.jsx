@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import AthleteList from "./components/AthleteList";
 import AthleteDetail from "./components/AthleteDetail";
 import AddAthleteModal from "./components/AddAthleteModal";
 import EditAthleteModal from "./components/EditAthleteModal";
@@ -30,27 +29,51 @@ export default function App() {
   }
 
   async function handleDelete(id) {
+    if (!confirm(`Supprimer ${athletes.find(a => a.id === id)?.name} ?`)) return;
     await api.deleteAthlete(id);
     setAthletes((prev) => prev.filter((a) => a.id !== id));
     if (selected?.id === id) setSelected(null);
   }
 
+  function handleSelect(e) {
+    const id = parseInt(e.target.value);
+    setSelected(athletes.find((a) => a.id === id) ?? null);
+  }
+
   return (
     <div className="app">
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1>TotoCoaching</h1>
-          <button className="btn-add" onClick={() => setShowAdd(true)}>
-            + Athlète
+      <aside className="left-panel">
+        <div className="panel-title">TotoCoaching</div>
+
+        <div className="athlete-selector">
+          <select value={selected?.id ?? ""} onChange={handleSelect}>
+            <option value="">— Sélectionner un athlète —</option>
+            {athletes.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+          <button className="btn-add-icon" title="Ajouter un athlète" onClick={() => setShowAdd(true)}>
+            +
           </button>
         </div>
-        <AthleteList
-          athletes={athletes}
-          selected={selected}
-          onSelect={setSelected}
-          onEdit={setEditing}
-          onDelete={handleDelete}
-        />
+
+        {selected && (
+          <div className="athlete-card">
+            <div className="athlete-card-name">{selected.name}</div>
+            <div className="athlete-card-row">
+              <span className="info-label">ID intervals.icu</span>
+              <span className="info-value">{selected.intervals_athlete_id}</span>
+            </div>
+            <div className="athlete-card-actions">
+              <button className="btn-card-edit" onClick={() => setEditing(selected)}>✎ Modifier</button>
+              <button className="btn-card-delete" onClick={() => handleDelete(selected.id)}>✕ Supprimer</button>
+            </div>
+          </div>
+        )}
+
+        {athletes.length === 0 && (
+          <p className="no-athletes">Aucun athlète. Clique sur + pour en ajouter.</p>
+        )}
       </aside>
 
       <main className="main">
