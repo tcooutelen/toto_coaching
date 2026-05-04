@@ -22,6 +22,8 @@ export const api = {
     if (newest) params.set("newest", newest);
     return req(`/athletes/${id}/activities?${params}`);
   },
+  getActivity: (athleteId, activityId) =>
+    req(`/athletes/${athleteId}/activities/${activityId}`),
   getWellness: (id) => req(`/athletes/${id}/wellness`),
   getEvents: (id) => req(`/athletes/${id}/events`),
 };

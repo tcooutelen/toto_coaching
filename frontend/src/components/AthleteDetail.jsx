@@ -50,7 +50,7 @@ export default function AthleteDetail({ athlete }) {
       {error && <p className="error">Erreur : {error}</p>}
 
       {!loading && !error && tab === "Activités" && (
-        <ActivityList activities={activities} />
+        <ActivityList athleteId={athlete.id} activities={activities} />
       )}
       {!loading && !error && tab === "Wellness" && (
         <WellnessPanel wellness={wellness} />

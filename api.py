@@ -128,6 +128,15 @@ def get_wellness(
         raise HTTPException(status_code=502, detail=str(e))
 
 
+@app.get("/athletes/{athlete_id}/activities/{activity_id}")
+def get_activity(activity_id: str, athlete_id: int, db: Session = Depends(get_db)):
+    athlete = get_athlete_or_404(athlete_id, db)
+    try:
+        return make_client(athlete).get_activity(activity_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @app.get("/athletes/{athlete_id}/events")
 def get_events(
     athlete_id: int,

@@ -275,3 +275,132 @@ body {
   color: #ef4444;
   font-size: 13px;
 }
+
+/* ── Activity table clickable ── */
+.activity-table.clickable tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.activity-table.clickable tbody tr:hover td {
+  background: #232640;
+}
+
+/* ── Modal large (activité) ── */
+.modal-large {
+  width: 760px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px 28px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.modal-header h2 {
+  font-size: 17px;
+  margin: 4px 0 2px;
+}
+
+.activity-date {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.activity-badge {
+  display: inline-block;
+  background: #232640;
+  color: #7c8cff;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.btn-close:hover { color: #e2e8f0; }
+
+/* ── Stat grid ── */
+.stat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.stat-box {
+  background: #0f1117;
+  border: 1px solid #2d3148;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  min-width: 100px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* ── Lap chart ── */
+.lap-chart {
+  margin-bottom: 20px;
+}
+
+.lap-chart h3 {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.lap-table-wrap {
+  overflow-x: auto;
+}
+
+/* ── Wellness charts ── */
+.wellness-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.chart-block h3 {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.wellness-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.wellness-legend span {
+  font-weight: 600;
+}
