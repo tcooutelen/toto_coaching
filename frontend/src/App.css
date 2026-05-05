@@ -159,6 +159,7 @@ body {
 /* ── Main ── */
 .main {
   flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 32px 40px;
   min-width: 0;
@@ -204,6 +205,110 @@ body {
   color: #1e293b;
 }
 
+/* ── Stats panel ── */
+.stats-panel {
+  margin-bottom: 24px;
+}
+
+.stats-grid {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.pmc-current {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.pmc-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pmc-label {
+  font-size: 10px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pmc-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pmc-date {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.stats-table-wrap {
+  flex: 1;
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.stats-table th {
+  text-align: right;
+  padding: 6px 14px;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 12px;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.stats-table th:first-child { text-align: left; }
+
+.stats-table .period-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.stats-table td {
+  text-align: right;
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-table td:first-child {
+  text-align: left;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.stats-table tr:last-child td { border-bottom: none; }
+
+.stats-table .disabled {
+  color: #cbd5e1;
+}
+
+.stats-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
 /* ── Tabs ── */
 .tabs {
   display: flex;
@@ -229,6 +334,115 @@ body {
   color: #4f6ef7;
   border-bottom-color: #4f6ef7;
 }
+
+/* ── Sport tab ── */
+.sport-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+
+.sport-stats-table-wrap {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 4px 0;
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.sport-activity-list {
+  /* list below the stats table */
+}
+
+/* ── Efforts table ── */
+.efforts-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px 20px;
+  min-width: 0;
+}
+
+.efforts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.efforts-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.efforts-period-select {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.period-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  padding: 3px 9px;
+  font-size: 11px;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.period-btn:hover { background: #e2e8f0; }
+
+.period-btn.active {
+  background: #4f6ef7;
+  border-color: #4f6ef7;
+  color: #fff;
+}
+
+.period-btn.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.efforts-table-wrap { overflow-x: auto; }
+
+.efforts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.efforts-table th {
+  text-align: right;
+  padding: 5px 12px;
+  color: #94a3b8;
+  font-weight: 500;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.efforts-table th:first-child { text-align: left; }
+
+.efforts-table td {
+  text-align: right;
+  padding: 7px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+
+.efforts-row-label {
+  text-align: left !important;
+  color: #64748b !important;
+  font-size: 12px;
+}
+
+.efforts-table tr:last-child td { border-bottom: none; }
 
 /* ── Filters ── */
 .filters {

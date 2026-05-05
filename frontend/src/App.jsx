@@ -64,6 +64,12 @@ export default function App() {
               <span className="info-label">ID intervals.icu</span>
               <span className="info-value">{selected.intervals_athlete_id}</span>
             </div>
+            {selected.season_start && (
+              <div className="athlete-card-row">
+                <span className="info-label">Début de saison</span>
+                <span className="info-value">{selected.season_start}</span>
+              </div>
+            )}
             <div className="athlete-card-actions">
               <button className="btn-card-edit" onClick={() => setEditing(selected)}>✎ Modifier</button>
               <button className="btn-card-delete" onClick={() => handleDelete(selected.id)}>✕ Supprimer</button>

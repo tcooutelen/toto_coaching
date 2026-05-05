@@ -71,6 +71,55 @@ class IntervalsClient:
         }
         return self._get(f"/athlete/{self.athlete_id}/events", params)
 
+    EFFORT_DURATIONS = [5, 30, 60, 180, 300, 600, 1200, 3600]
+
+    def _best_avg_per_duration(self, data: list, decimals: int = 0) -> dict:
+        """Meilleure moyenne glissante par durée (fenêtre coulissante)."""
+        if not data:
+            return {d: None for d in self.EFFORT_DURATIONS}
+        arr = [v if v is not None else 0 for v in data]
+        n = len(arr)
+        result = {}
+        for dur in self.EFFORT_DURATIONS:
+            if n < dur:
+                result[dur] = None
+                continue
+            window_sum = sum(arr[:dur])
+            best = window_sum
+            for i in range(1, n - dur + 1):
+                window_sum += arr[i + dur - 1] - arr[i - 1]
+                if window_sum > best:
+                    best = window_sum
+            avg = best / dur
+            result[dur] = round(avg, decimals) if avg > 0 else None
+        return result
+
+    def get_activity_bests(self, activity_id: str) -> dict:
+        """Meilleures moyennes glissantes (puissance, FC, cadence) par durée pour une activité vélo."""
+        streams = self._get(f"/activity/{activity_id}/streams?streams=watts,heartrate,cadence", {})
+
+        def extract(stream_type):
+            return next((s["data"] for s in streams if s.get("type") == stream_type), None)
+
+        return {
+            "power":   self._best_avg_per_duration(extract("watts")),
+            "hr":      self._best_avg_per_duration(extract("heartrate")),
+            "cadence": self._best_avg_per_duration(extract("cadence")),
+        }
+
+    def get_activity_run_bests(self, activity_id: str) -> dict:
+        """Meilleures moyennes glissantes (allure m/s, FC, cadence) par durée pour une activité course."""
+        streams = self._get(f"/activity/{activity_id}/streams?streams=velocity_smooth,heartrate,cadence", {})
+
+        def extract(stream_type):
+            return next((s["data"] for s in streams if s.get("type") == stream_type), None)
+
+        return {
+            "pace":    self._best_avg_per_duration(extract("velocity_smooth"), decimals=2),
+            "hr":      self._best_avg_per_duration(extract("heartrate")),
+            "cadence": self._best_avg_per_duration(extract("cadence")),
+        }
+
     def get_activity(self, activity_id: str) -> dict:
         """Détail complet d'une activité (laps, métriques pace/puissance)."""
         result = self._get(f"/athlete/{self.athlete_id}/activities/{activity_id}")

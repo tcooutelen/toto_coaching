@@ -5,6 +5,7 @@ export default function EditAthleteModal({ athlete, onSave, onClose }) {
     name: athlete.name,
     intervals_athlete_id: athlete.intervals_athlete_id,
     intervals_api_key: "",
+    season_start: athlete.season_start ?? "",
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +58,15 @@ export default function EditAthleteModal({ athlete, onSave, onClose }) {
               value={form.intervals_api_key}
               onChange={handleChange}
               placeholder="••••••••"
+            />
+          </label>
+          <label>
+            Début de saison
+            <input
+              name="season_start"
+              type="date"
+              value={form.season_start}
+              onChange={handleChange}
             />
           </label>
           {error && <p className="error">{error}</p>}

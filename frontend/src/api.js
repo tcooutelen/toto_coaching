@@ -30,6 +30,14 @@ export const api = {
   },
   getActivity: (athleteId, activityId) =>
     req(`/athletes/${athleteId}/activities/${activityId}`),
+  getStats: (id) => req(`/athletes/${id}/stats`),
+  getEfforts: (id, oldest, newest, sport = "ride") => {
+    const params = new URLSearchParams();
+    params.set("sport", sport);
+    if (oldest) params.set("oldest", oldest);
+    if (newest) params.set("newest", newest);
+    return req(`/athletes/${id}/efforts?${params}`);
+  },
   syncAthlete: (id, oldest, newest) =>
     req(`/athletes/${id}/sync`, {
       method: "POST",

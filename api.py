@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from datetime import date, timedelta
 from typing import Optional, List
 
-from database import get_db, init_db
+from database import get_db, init_db, engine
 from models.athlete import Athlete
 from models.activity import Activity
 from models.wellness import Wellness
@@ -25,6 +25,14 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     init_db()
+    # Migration : ajout colonne season_start si absente
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE athletes ADD COLUMN season_start VARCHAR"))
+            conn.commit()
+        except Exception:
+            pass
 
 
 # ── Schémas Pydantic ──────────────────────────────────────────────────────────
@@ -33,12 +41,14 @@ class AthleteCreate(BaseModel):
     name: str
     intervals_athlete_id: str
     intervals_api_key: str
+    season_start: Optional[str] = None
 
 
 class AthleteOut(BaseModel):
     id: int
     name: str
     intervals_athlete_id: str
+    season_start: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -48,6 +58,7 @@ class AthleteUpdate(BaseModel):
     name: Optional[str] = None
     intervals_athlete_id: Optional[str] = None
     intervals_api_key: Optional[str] = None
+    season_start: Optional[str] = None
 
 
 class SyncRequest(BaseModel):
@@ -101,6 +112,57 @@ def delete_athlete(athlete_id: int, db: Session = Depends(get_db)):
     athlete = get_athlete_or_404(athlete_id, db)
     db.delete(athlete)
     db.commit()
+
+
+# ── Stats ─────────────────────────────────────────────────────────────────────
+
+def _compute_period_stats(rows):
+    count = len(rows)
+    distance = round(sum((a.data.get("distance") or 0) for a in rows) / 1000, 1)
+    duration = round(sum((a.data.get("moving_time") or a.data.get("elapsed_time") or 0) for a in rows) / 3600, 1)
+    tss = round(sum((a.data.get("icu_training_load") or 0) for a in rows))
+    return {"count": count, "distance_km": distance, "duration_h": duration, "tss": tss}
+
+
+@app.get("/athletes/{athlete_id}/stats")
+def get_stats(athlete_id: int, db: Session = Depends(get_db)):
+    athlete = get_athlete_or_404(athlete_id, db)
+    today = date.today().isoformat()
+
+    periods = {
+        "42j":    (date.today() - timedelta(days=42)).isoformat(),
+        "84j":    (date.today() - timedelta(days=84)).isoformat(),
+        "saison": athlete.season_start,
+        "all":    None,
+    }
+
+    result = {}
+    for label, start in periods.items():
+        q = db.query(Activity).filter(Activity.athlete_id == athlete_id)
+        if start:
+            q = q.filter(Activity.start_date_local >= start)
+        q = q.filter(Activity.start_date_local <= today)
+        result[label] = _compute_period_stats(q.all())
+
+    # CTL / ATL / TSB les plus récents
+    latest_wellness = (
+        db.query(Wellness)
+        .filter(Wellness.athlete_id == athlete_id)
+        .order_by(Wellness.date.desc())
+        .first()
+    )
+    if latest_wellness:
+        w = latest_wellness.data
+        result["current"] = {
+            "ctl": round(w.get("ctl") or 0, 1),
+            "atl": round(w.get("atl") or 0, 1),
+            "tsb": round((w.get("ctl") or 0) - (w.get("atl") or 0), 1),
+            "date": latest_wellness.date,
+        }
+    else:
+        result["current"] = None
+
+    return result
 
 
 # ── Sync ──────────────────────────────────────────────────────────────────────
@@ -218,6 +280,103 @@ def get_wellness(
         q = q.filter(Wellness.date <= newest.isoformat())
     rows = q.order_by(Wellness.date.desc()).all()
     return [r.data for r in rows]
+
+
+# ── Efforts / courbe de puissance ────────────────────────────────────────────
+
+@app.get("/athletes/{athlete_id}/efforts")
+def get_efforts(
+    athlete_id: int,
+    sport: str = "ride",
+    oldest: Optional[date] = None,
+    newest: Optional[date] = None,
+    db: Session = Depends(get_db),
+):
+    athlete = get_athlete_or_404(athlete_id, db)
+    client = make_client(athlete)
+    DURATIONS = IntervalsClient.EFFORT_DURATIONS
+
+    # ── Vélo ──────────────────────────────────────────────────────────────────
+    if sport == "ride":
+        result = {d: {"power": None, "hr": None, "cadence": None} for d in DURATIONS}
+
+        if oldest is None and newest is None:
+            try:
+                data = client._get(f"/athlete/{athlete.intervals_athlete_id}/power-curves", {"type": "Ride"})
+                curve_list = data.get("list", []) if isinstance(data, dict) else []
+                if curve_list:
+                    curve = curve_list[0]
+                    for i, s in enumerate(curve.get("secs", [])):
+                        secs = int(s)
+                        vals = curve.get("values", [])
+                        if secs in result and i < len(vals) and vals[i] is not None:
+                            result[secs]["power"] = vals[i]
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=str(e))
+
+            for ride in db.query(Activity).filter(Activity.athlete_id == athlete_id).all():
+                bests = ride.data.get("_activity_bests")
+                if not bests:
+                    continue
+                for d in DURATIONS:
+                    for metric in ("hr", "cadence"):
+                        val = (bests.get(metric) or {}).get(str(d))
+                        if val is not None and (result[d][metric] is None or val > result[d][metric]):
+                            result[d][metric] = val
+            return result
+
+        oldest_str = oldest.isoformat()
+        newest_str = (newest or date.today()).isoformat()
+        rides = db.query(Activity).filter(
+            Activity.athlete_id == athlete_id,
+            Activity.start_date_local >= oldest_str,
+            Activity.start_date_local <= newest_str,
+        ).all()
+        rides = [a for a in rides if a.data.get("type") in ("Ride", "VirtualRide") and a.data.get("icu_average_watts")]
+
+        for ride in rides:
+            bests = ride.data.get("_activity_bests")
+            if not bests:
+                try:
+                    bests = client.get_activity_bests(ride.id)
+                except Exception:
+                    continue
+                ride.data = {**ride.data, "_activity_bests": bests}
+                db.commit()
+            for d in DURATIONS:
+                for metric in ("power", "hr", "cadence"):
+                    val = (bests.get(metric) or {}).get(str(d)) if isinstance(bests, dict) else None
+                    if val is not None and (result[d][metric] is None or val > result[d][metric]):
+                        result[d][metric] = val
+        return result
+
+    # ── Course à pied ─────────────────────────────────────────────────────────
+    if sport == "run":
+        result = {d: {"pace": None, "hr": None, "cadence": None} for d in DURATIONS}
+
+        q = db.query(Activity).filter(Activity.athlete_id == athlete_id)
+        if oldest:
+            q = q.filter(Activity.start_date_local >= oldest.isoformat())
+        q = q.filter(Activity.start_date_local <= (newest or date.today()).isoformat())
+        runs = [a for a in q.all() if a.data.get("type") in ("Run", "VirtualRun", "TrailRun")]
+
+        for run in runs:
+            bests = run.data.get("_run_bests")
+            if not bests:
+                try:
+                    bests = client.get_activity_run_bests(run.id)
+                except Exception:
+                    continue
+                run.data = {**run.data, "_run_bests": bests}
+                db.commit()
+            for d in DURATIONS:
+                for metric in ("pace", "hr", "cadence"):
+                    val = (bests.get(metric) or {}).get(str(d)) if isinstance(bests, dict) else None
+                    if val is not None and (result[d][metric] is None or val > result[d][metric]):
+                        result[d][metric] = val
+        return result
+
+    raise HTTPException(status_code=400, detail=f"Sport inconnu : {sport}")
 
 
 # ── Autres routes intervals.icu ───────────────────────────────────────────────

@@ -1,19 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../api";
-import ActivityList from "./ActivityList";
+import SportTab from "./SportTab";
 import WellnessPanel from "./WellnessPanel";
 import RefreshModal from "./RefreshModal";
+import StatsPanel from "./StatsPanel";
 
-const TABS = ["Activités", "Wellness"];
+const SPORTS = [
+  { id: "velo",     label: "🚴 Vélo",     types: ["Ride", "VirtualRide"] },
+  { id: "course",   label: "🏃 Course",   types: ["Run", "Walk"] },
+  { id: "natation", label: "🏊 Natation", types: ["Swim"] },
+];
 
-function offsetDate(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+const TABS = [...SPORTS.map((s) => s.id), "wellness"];
 
 export default function AthleteDetail({ athlete }) {
-  const [tab, setTab] = useState("Activités");
+  const [tab, setTab] = useState("velo");
   const [activities, setActivities] = useState([]);
   const [wellness, setWellness] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -21,13 +22,14 @@ export default function AthleteDetail({ athlete }) {
   const [error, setError] = useState(null);
   const [showRefresh, setShowRefresh] = useState(false);
   const [hasData, setHasData] = useState(null);
+  const [syncKey, setSyncKey] = useState(0);
 
-  const fetchLocal = useCallback((oldest, newest) => {
+  const fetchLocal = useCallback(() => {
     setError(null);
     setLoading(true);
     Promise.all([
-      api.getActivities(athlete.id, oldest, newest),
-      api.getWellness(athlete.id, oldest, newest),
+      api.getActivities(athlete.id),
+      api.getWellness(athlete.id),
     ])
       .then(([acts, well]) => {
         setActivities(acts);
@@ -42,7 +44,7 @@ export default function AthleteDetail({ athlete }) {
     setActivities([]);
     setWellness([]);
     setHasData(null);
-    fetchLocal(offsetDate(-365), offsetDate(0));
+    fetchLocal();
   }, [athlete.id, fetchLocal]);
 
   async function handleRefresh(oldest, newest) {
@@ -51,14 +53,16 @@ export default function AthleteDetail({ athlete }) {
     setSyncing(true);
     try {
       await api.syncAthlete(athlete.id, oldest, newest);
-      fetchLocal(oldest, newest);
+      setSyncKey((k) => k + 1);
+      fetchLocal();
     } catch (err) {
       setError(err.message);
-      setSyncing(false);
     } finally {
       setSyncing(false);
     }
   }
+
+  const currentSport = SPORTS.find((s) => s.id === tab);
 
   return (
     <div className="athlete-detail">
@@ -69,19 +73,29 @@ export default function AthleteDetail({ athlete }) {
         </button>
       </div>
 
+      <StatsPanel athlete={athlete} />
+
       <div className="tabs">
-        {TABS.map((t) => (
+        {SPORTS.map((s) => (
           <button
-            key={t}
-            className={`tab ${tab === t ? "active" : ""}`}
-            onClick={() => setTab(t)}
+            key={s.id}
+            className={`tab ${tab === s.id ? "active" : ""}`}
+            onClick={() => setTab(s.id)}
           >
-            {t}
+            {s.label}
           </button>
         ))}
+        <button
+          className={`tab ${tab === "wellness" ? "active" : ""}`}
+          onClick={() => setTab("wellness")}
+        >
+          Wellness
+        </button>
       </div>
 
-      {(loading || syncing) && <p className="loading">{syncing ? "Synchronisation en cours…" : "Chargement…"}</p>}
+      {(loading || syncing) && (
+        <p className="loading">{syncing ? "Synchronisation en cours…" : "Chargement…"}</p>
+      )}
       {error && <p className="error">Erreur : {error}</p>}
 
       {!loading && !syncing && !error && hasData === false && (
@@ -90,10 +104,18 @@ export default function AthleteDetail({ athlete }) {
         </div>
       )}
 
-      {!loading && !syncing && !error && hasData && tab === "Activités" && (
-        <ActivityList athleteId={athlete.id} activities={activities} />
+      {!loading && !syncing && !error && hasData && currentSport && (
+        <SportTab
+          key={tab}
+          sport={currentSport}
+          activities={activities}
+          athlete={athlete}
+          athleteId={athlete.id}
+          syncKey={syncKey}
+        />
       )}
-      {!loading && !syncing && !error && hasData && tab === "Wellness" && (
+
+      {!loading && !syncing && !error && hasData && tab === "wellness" && (
         <WellnessPanel wellness={wellness} />
       )}
 

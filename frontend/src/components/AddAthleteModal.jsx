@@ -5,6 +5,7 @@ export default function AddAthleteModal({ onSave, onClose }) {
     name: "",
     intervals_athlete_id: "",
     intervals_api_key: "",
+    season_start: "",
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -60,6 +61,15 @@ export default function AddAthleteModal({ onSave, onClose }) {
               onChange={handleChange}
               required
               placeholder="Trouvée dans Paramètres > API"
+            />
+          </label>
+          <label>
+            Début de saison
+            <input
+              name="season_start"
+              type="date"
+              value={form.season_start}
+              onChange={handleChange}
             />
           </label>
           {error && <p className="error">{error}</p>}
