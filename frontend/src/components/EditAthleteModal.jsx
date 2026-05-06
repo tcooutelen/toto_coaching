@@ -34,40 +34,19 @@ export default function EditAthleteModal({ athlete, onSave, onClose }) {
         <form onSubmit={handleSubmit}>
           <label>
             Nom
-            <input
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              required
-            />
+            <input name="name" value={form.name} onChange={handleChange} required />
           </label>
           <label>
             Athlete ID intervals.icu
-            <input
-              name="intervals_athlete_id"
-              value={form.intervals_athlete_id}
-              onChange={handleChange}
-              required
-            />
+            <input name="intervals_athlete_id" value={form.intervals_athlete_id} onChange={handleChange} required />
           </label>
           <label>
             Nouvelle clé API (laisser vide pour ne pas changer)
-            <input
-              name="intervals_api_key"
-              type="password"
-              value={form.intervals_api_key}
-              onChange={handleChange}
-              placeholder="••••••••"
-            />
+            <input name="intervals_api_key" type="password" value={form.intervals_api_key} onChange={handleChange} placeholder="••••••••" />
           </label>
           <label>
             Début de saison
-            <input
-              name="season_start"
-              type="date"
-              value={form.season_start}
-              onChange={handleChange}
-            />
+            <input name="season_start" type="date" value={form.season_start} onChange={handleChange} />
           </label>
           {error && <p className="error">{error}</p>}
           <div className="modal-actions">

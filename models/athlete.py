@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, JSON
 from datetime import datetime
 from database import Base
 
@@ -11,4 +11,5 @@ class Athlete(Base):
     intervals_athlete_id = Column(String, unique=True, nullable=False)
     intervals_api_key = Column(String, nullable=False)
     season_start = Column(String, nullable=True)  # YYYY-MM-DD
+    effort_durations = Column(JSON, nullable=True)  # list of seconds, e.g. [600, 1080, 2700]
     created_at = Column(DateTime, default=datetime.utcnow)

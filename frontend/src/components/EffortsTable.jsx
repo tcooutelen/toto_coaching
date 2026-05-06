@@ -12,13 +12,14 @@ const DURATIONS = [
   { secs: 3600, label: "1 h" },
 ];
 
+// Ordered smallest → largest; color = freshness of the best effort
 const PERIODS = [
-  { key: "7j",     label: "7 jours",  days: 7 },
-  { key: "28j",    label: "28 jours", days: 28 },
-  { key: "42j",    label: "42 jours", days: 42 },
-  { key: "84j",    label: "84 jours", days: 84 },
-  { key: "saison", label: "Saison",   season: true },
-  { key: "all",    label: "All time", all: true },
+  { key: "7j",     label: "7 jours",  days: 7,      color: "#d1fae5" },
+  { key: "28j",    label: "28 jours", days: 28,     color: "#ecfccb" },
+  { key: "42j",    label: "42 jours", days: 42,     color: "#fef9c3" },
+  { key: "84j",    label: "84 jours", days: 84,     color: "#ffedd5" },
+  { key: "saison", label: "Saison",   season: true, color: "#ffe4e6" },
+  { key: "all",    label: "All time", all: true,    color: "#fee2e2" },
 ];
 
 function periodDates(period, athlete) {
@@ -58,26 +59,46 @@ const ROWS_BY_SPORT = {
 
 export default function EffortsTable({ athleteId, athlete, syncKey, sport = "ride" }) {
   const [periodKey, setPeriodKey] = useState(sport === "run" ? "28j" : "all");
-  const [data, setData] = useState(null);
+  const [allData, setAllData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const period = PERIODS.find((p) => p.key === periodKey);
   const isSeason = period?.season && !athlete.season_start;
 
+  // Charge toutes les périodes en parallèle pour pouvoir calculer la fraîcheur de chaque valeur
   useEffect(() => {
-    if (isSeason) return;
-    const { oldest, newest } = periodDates(period, athlete);
     setLoading(true);
-    setData(null);
+    setAllData({});
     setError(null);
-    api.getEfforts(athleteId, oldest, newest, sport)
-      .then(setData)
+
+    const fetches = PERIODS
+      .filter((p) => !(p.season && !athlete.season_start))
+      .map((p) => {
+        const { oldest, newest } = periodDates(p, athlete);
+        return api.getEfforts(athleteId, oldest, newest, sport)
+          .then((d) => [p.key, d])
+          .catch(() => [p.key, null]);
+      });
+
+    Promise.all(fetches)
+      .then((results) => setAllData(Object.fromEntries(results)))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [athleteId, periodKey, athlete.season_start, syncKey, sport]);
+  }, [athleteId, athlete.season_start, syncKey, sport]);
 
+  const data = allData[periodKey];
   const rows = ROWS_BY_SPORT[sport] ?? ROWS_BY_SPORT.ride;
+
+  // Retourne la couleur de la plus petite fenêtre qui contient cette valeur
+  function getCellColor(secs, field, val) {
+    if (val == null) return undefined;
+    for (const p of PERIODS) {
+      const pVal = allData[p.key]?.[secs]?.[field];
+      if (pVal != null && Math.abs(pVal - val) <= 0.005) return p.color;
+    }
+    return PERIODS[PERIODS.length - 1].color;
+  }
 
   return (
     <div className="efforts-section">
@@ -88,6 +109,7 @@ export default function EffortsTable({ athleteId, athlete, syncKey, sport = "rid
             <button
               key={p.key}
               className={`period-btn ${periodKey === p.key ? "active" : ""} ${p.season && !athlete.season_start ? "disabled" : ""}`}
+              style={periodKey === p.key ? undefined : { borderLeftColor: p.color, borderLeftWidth: 3 }}
               onClick={() => !(p.season && !athlete.season_start) && setPeriodKey(p.key)}
             >
               {p.label}
@@ -116,13 +138,27 @@ export default function EffortsTable({ athleteId, athlete, syncKey, sport = "rid
               {rows.map((row) => (
                 <tr key={row.field}>
                   <td className="efforts-row-label">{row.label}</td>
-                  {DURATIONS.map((d) => (
-                    <td key={d.secs}>{row.render(data[d.secs]?.[row.field])}</td>
-                  ))}
+                  {DURATIONS.map((d) => {
+                    const val = data[d.secs]?.[row.field];
+                    const bg = getCellColor(d.secs, row.field, val);
+                    return (
+                      <td key={d.secs} style={bg ? { backgroundColor: bg } : undefined}>
+                        {row.render(val)}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
           </table>
+          <div className="efforts-legend">
+            {PERIODS.filter((p) => !(p.season && !athlete.season_start)).map((p) => (
+              <span key={p.key} className="legend-item">
+                <span className="legend-dot" style={{ backgroundColor: p.color }} />
+                {p.label}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -25,23 +25,30 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     init_db()
-    # Migration : ajout colonne season_start si absente
     from sqlalchemy import text
     with engine.connect() as conn:
-        try:
-            conn.execute(text("ALTER TABLE athletes ADD COLUMN season_start VARCHAR"))
-            conn.commit()
-        except Exception:
-            pass
+        for ddl in [
+            "ALTER TABLE athletes ADD COLUMN season_start VARCHAR",
+            "ALTER TABLE athletes ADD COLUMN effort_durations TEXT",
+        ]:
+            try:
+                conn.execute(text(ddl))
+                conn.commit()
+            except Exception:
+                pass
 
 
 # ── Schémas Pydantic ──────────────────────────────────────────────────────────
+
+DEFAULT_EFFORT_DURATIONS = [600, 1080, 2700]  # 10min, 18min, 45min
+
 
 class AthleteCreate(BaseModel):
     name: str
     intervals_athlete_id: str
     intervals_api_key: str
     season_start: Optional[str] = None
+    effort_durations: Optional[List[int]] = None
 
 
 class AthleteOut(BaseModel):
@@ -49,6 +56,7 @@ class AthleteOut(BaseModel):
     name: str
     intervals_athlete_id: str
     season_start: Optional[str] = None
+    effort_durations: Optional[List[int]] = None
 
     class Config:
         from_attributes = True
@@ -59,6 +67,7 @@ class AthleteUpdate(BaseModel):
     intervals_athlete_id: Optional[str] = None
     intervals_api_key: Optional[str] = None
     season_start: Optional[str] = None
+    effort_durations: Optional[List[int]] = None
 
 
 class SyncRequest(BaseModel):
@@ -261,6 +270,34 @@ def get_activity(activity_id: str, athlete_id: int, db: Session = Depends(get_db
         ))
     db.commit()
     return detail
+
+
+@app.get("/athletes/{athlete_id}/activities/{activity_id}/streams")
+def get_activity_streams(activity_id: str, athlete_id: int, db: Session = Depends(get_db)):
+    athlete = get_athlete_or_404(athlete_id, db)
+    row = db.query(Activity).filter_by(id=activity_id, athlete_id=athlete_id).first()
+
+    if row and row.data and "_streams" in row.data:
+        return row.data["_streams"]
+
+    try:
+        client = make_client(athlete)
+        raw = client._get(
+            f"/activity/{activity_id}/streams",
+            {"streams": "watts,heartrate,cadence,velocity_smooth,altitude"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    result = {}
+    for s in (raw if isinstance(raw, list) else []):
+        result[s["type"]] = s.get("data", [])
+
+    if row:
+        row.data = {**row.data, "_streams": result}
+        db.commit()
+
+    return result
 
 
 # ── Routes wellness (lecture DB) ─────────────────────────────────────────────

@@ -30,6 +30,8 @@ export const api = {
   },
   getActivity: (athleteId, activityId) =>
     req(`/athletes/${athleteId}/activities/${activityId}`),
+  getActivityStreams: (athleteId, activityId) =>
+    req(`/athletes/${athleteId}/activities/${activityId}/streams`),
   getStats: (id) => req(`/athletes/${id}/stats`),
   getEfforts: (id, oldest, newest, sport = "ride") => {
     const params = new URLSearchParams();

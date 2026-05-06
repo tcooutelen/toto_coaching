@@ -27,7 +27,7 @@ function formatDistance(meters) {
 
 const ALL_TYPES = ["Ride", "VirtualRide", "Run", "Swim", "Walk"];
 
-export default function ActivityList({ athleteId, activities }) {
+export default function ActivityList({ athleteId, athlete, activities }) {
   const [selected, setSelected] = useState(null);
   const [filterType, setFilterType] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -130,6 +130,7 @@ export default function ActivityList({ athleteId, activities }) {
       {selected && (
         <ActivityModal
           athleteId={athleteId}
+          athlete={athlete}
           activity={selected}
           onClose={() => setSelected(null)}
         />

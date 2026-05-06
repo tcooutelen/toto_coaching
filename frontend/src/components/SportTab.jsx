@@ -134,7 +134,7 @@ export default function SportTab({ sport, activities, athlete, athleteId, syncKe
       )}
 
       <div className="sport-activity-list">
-        <ActivityList athleteId={athleteId} activities={sportActivities} />
+        <ActivityList athleteId={athleteId} athlete={athlete} activities={sportActivities} />
       </div>
     </div>
   );
