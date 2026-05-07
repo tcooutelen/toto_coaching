@@ -108,8 +108,8 @@ class IntervalsClient:
         }
 
     def get_activity_run_bests(self, activity_id: str) -> dict:
-        """Meilleures moyennes glissantes (allure m/s, FC, cadence) par durée pour une activité course."""
-        streams = self._get(f"/activity/{activity_id}/streams?streams=velocity_smooth,heartrate,cadence", {})
+        """Meilleures moyennes glissantes (allure m/s, FC, cadence, puissance) par durée pour une activité course."""
+        streams = self._get(f"/activity/{activity_id}/streams?streams=velocity_smooth,heartrate,cadence,watts", {})
 
         def extract(stream_type):
             return next((s["data"] for s in streams if s.get("type") == stream_type), None)
@@ -118,6 +118,7 @@ class IntervalsClient:
             "pace":    self._best_avg_per_duration(extract("velocity_smooth"), decimals=2),
             "hr":      self._best_avg_per_duration(extract("heartrate")),
             "cadence": self._best_avg_per_duration(extract("cadence")),
+            "power":   self._best_avg_per_duration(extract("watts")),
         }
 
     def get_activity(self, activity_id: str) -> dict:

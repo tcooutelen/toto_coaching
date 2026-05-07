@@ -3,7 +3,13 @@ import { api } from "../api";
 import SportTab from "./SportTab";
 import WellnessPanel from "./WellnessPanel";
 import RefreshModal from "./RefreshModal";
-import StatsPanel from "./StatsPanel";
+
+function tsbClass(tsb) {
+  if (tsb == null) return "";
+  if (tsb > 5) return "tsb-fresh";
+  if (tsb < -10) return "tsb-tired";
+  return "tsb-ok";
+}
 
 const SPORTS = [
   { id: "velo",     label: "🚴 Vélo",     types: ["Ride", "VirtualRide"] },
@@ -11,7 +17,6 @@ const SPORTS = [
   { id: "natation", label: "🏊 Natation", types: ["Swim"] },
 ];
 
-const TABS = [...SPORTS.map((s) => s.id), "wellness"];
 
 export default function AthleteDetail({ athlete }) {
   const [tab, setTab] = useState("velo");
@@ -23,6 +28,7 @@ export default function AthleteDetail({ athlete }) {
   const [showRefresh, setShowRefresh] = useState(false);
   const [hasData, setHasData] = useState(null);
   const [syncKey, setSyncKey] = useState(0);
+  const [current, setCurrent] = useState(null);
 
   const fetchLocal = useCallback(() => {
     setError(null);
@@ -44,7 +50,9 @@ export default function AthleteDetail({ athlete }) {
     setActivities([]);
     setWellness([]);
     setHasData(null);
+    setCurrent(null);
     fetchLocal();
+    api.getStats(athlete.id).then(d => setCurrent(d.current ?? null)).catch(() => null);
   }, [athlete.id, fetchLocal]);
 
   async function handleRefresh(oldest, newest) {
@@ -64,18 +72,41 @@ export default function AthleteDetail({ athlete }) {
 
   const currentSport = SPORTS.find((s) => s.id === tab);
 
+
   return (
     <div className="athlete-detail">
       <div className="detail-header">
         <h2>{athlete.name}</h2>
+        {current && (
+          <div className="header-pmc">
+            <div className="header-pmc-item">
+              <span className="header-pmc-label">CTL</span>
+              <span className="header-pmc-value" style={{ color: "#4f6ef7" }}>{current.ctl}</span>
+            </div>
+            <div className="header-pmc-item">
+              <span className="header-pmc-label">ATL</span>
+              <span className="header-pmc-value" style={{ color: "#f97316" }}>{current.atl}</span>
+            </div>
+            <div className="header-pmc-item">
+              <span className="header-pmc-label">TSB</span>
+              <span className={`header-pmc-value ${tsbClass(current.tsb)}`}>
+                {current.tsb > 0 ? "+" : ""}{current.tsb}
+              </span>
+            </div>
+          </div>
+        )}
         <button className="btn-refresh" onClick={() => setShowRefresh(true)} disabled={syncing}>
           {syncing ? "Synchronisation…" : "↻ Rafraîchir"}
         </button>
       </div>
 
-      <StatsPanel athlete={athlete} />
-
       <div className="tabs">
+        <button
+          className={`tab ${tab === "tous" ? "active" : ""}`}
+          onClick={() => setTab("tous")}
+        >
+          Tous
+        </button>
         {SPORTS.map((s) => (
           <button
             key={s.id}
@@ -92,6 +123,7 @@ export default function AthleteDetail({ athlete }) {
           Wellness
         </button>
       </div>
+
 
       {(loading || syncing) && (
         <p className="loading">{syncing ? "Synchronisation en cours…" : "Chargement…"}</p>

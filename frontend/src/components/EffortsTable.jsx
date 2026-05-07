@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import ActivityModal from "./ActivityModal";
 
 const DURATIONS = [
   { secs: 5,    label: "5s" },
@@ -12,7 +13,6 @@ const DURATIONS = [
   { secs: 3600, label: "1 h" },
 ];
 
-// Ordered smallest → largest; color = freshness of the best effort
 const PERIODS = [
   { key: "7j",     label: "7 jours",  days: 7,      color: "#d1fae5" },
   { key: "28j",    label: "28 jours", days: 28,     color: "#ecfccb" },
@@ -52,21 +52,22 @@ const ROWS_BY_SPORT = {
   ],
   run: [
     { label: "Allure",         field: "pace",     render: fmtPace              },
+    { label: "Puissance (W)",  field: "power",   render: (v) => fmt(v, "W"),  optional: true },
     { label: "FC (bpm)",       field: "hr",       render: (v) => fmt(v, "bpm") },
     { label: "Cadence (spm)",  field: "cadence",  render: (v) => fmt(v, "spm") },
   ],
 };
 
-export default function EffortsTable({ athleteId, athlete, syncKey, sport = "ride" }) {
+export default function EffortsTable({ athleteId, athlete, syncKey, sport = "ride", activities = [] }) {
   const [periodKey, setPeriodKey] = useState(sport === "run" ? "28j" : "all");
   const [allData, setAllData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selected, setSelected] = useState(null);
 
   const period = PERIODS.find((p) => p.key === periodKey);
   const isSeason = period?.season && !athlete.season_start;
 
-  // Charge toutes les périodes en parallèle pour pouvoir calculer la fraîcheur de chaque valeur
   useEffect(() => {
     setLoading(true);
     setAllData({});
@@ -88,16 +89,29 @@ export default function EffortsTable({ athleteId, athlete, syncKey, sport = "rid
   }, [athleteId, athlete.season_start, syncKey, sport]);
 
   const data = allData[periodKey];
-  const rows = ROWS_BY_SPORT[sport] ?? ROWS_BY_SPORT.ride;
+  const allRows = ROWS_BY_SPORT[sport] ?? ROWS_BY_SPORT.ride;
+  const rows = allRows.filter(row => {
+    if (!row.optional) return true;
+    // Show optional rows only if at least one period has a value
+    return Object.values(allData).some(d =>
+      DURATIONS.some(dur => d?.[dur.secs]?.[row.field]?.value != null)
+    );
+  });
 
-  // Retourne la couleur de la plus petite fenêtre qui contient cette valeur
   function getCellColor(secs, field, val) {
     if (val == null) return undefined;
     for (const p of PERIODS) {
-      const pVal = allData[p.key]?.[secs]?.[field];
+      const pVal = allData[p.key]?.[secs]?.[field]?.value;
       if (pVal != null && Math.abs(pVal - val) <= 0.005) return p.color;
     }
     return PERIODS[PERIODS.length - 1].color;
+  }
+
+  function handleCellClick(secs, field) {
+    const actId = data?.[secs]?.[field]?.activity_id;
+    if (!actId) return;
+    const act = activities.find((a) => String(a.id) === String(actId));
+    if (act) setSelected(act);
   }
 
   return (
@@ -139,10 +153,18 @@ export default function EffortsTable({ athleteId, athlete, syncKey, sport = "rid
                 <tr key={row.field}>
                   <td className="efforts-row-label">{row.label}</td>
                   {DURATIONS.map((d) => {
-                    const val = data[d.secs]?.[row.field];
+                    const cell = data[d.secs]?.[row.field];
+                    const val = cell?.value;
+                    const actId = cell?.activity_id;
                     const bg = getCellColor(d.secs, row.field, val);
                     return (
-                      <td key={d.secs} style={bg ? { backgroundColor: bg } : undefined}>
+                      <td
+                        key={d.secs}
+                        style={bg ? { backgroundColor: bg } : undefined}
+                        className={actId ? "cell-clickable" : ""}
+                        onClick={() => actId && handleCellClick(d.secs, row.field)}
+                        title={actId ? "Voir l'activité" : undefined}
+                      >
                         {row.render(val)}
                       </td>
                     );
@@ -160,6 +182,15 @@ export default function EffortsTable({ athleteId, athlete, syncKey, sport = "rid
             ))}
           </div>
         </div>
+      )}
+
+      {selected && (
+        <ActivityModal
+          athleteId={athleteId}
+          athlete={athlete}
+          activity={selected}
+          onClose={() => setSelected(null)}
+        />
       )}
     </div>
   );

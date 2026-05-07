@@ -1,3 +1,4 @@
+import numpy as np
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from database import get_db, init_db, engine
 from models.athlete import Athlete
 from models.activity import Activity
 from models.wellness import Wellness
+from models.config import Config
 from services.intervals_client import IntervalsClient
 
 app = FastAPI(title="TotoCoaching API")
@@ -333,9 +335,19 @@ def get_efforts(
     client = make_client(athlete)
     DURATIONS = IntervalsClient.EFFORT_DURATIONS
 
+    def cell(val=None, act_id=None):
+        return {"value": val, "activity_id": act_id}
+
+    def update_best(result, dur, metric, val, act_id):
+        if val is None:
+            return
+        cur = result[dur][metric]["value"]
+        if cur is None or val > cur:
+            result[dur][metric] = cell(val, act_id)
+
     # ── Vélo ──────────────────────────────────────────────────────────────────
     if sport == "ride":
-        result = {d: {"power": None, "hr": None, "cadence": None} for d in DURATIONS}
+        result = {d: {"power": cell(), "hr": cell(), "cadence": cell()} for d in DURATIONS}
 
         if oldest is None and newest is None:
             try:
@@ -347,7 +359,7 @@ def get_efforts(
                         secs = int(s)
                         vals = curve.get("values", [])
                         if secs in result and i < len(vals) and vals[i] is not None:
-                            result[secs]["power"] = vals[i]
+                            update_best(result, secs, "power", vals[i], None)
             except Exception as e:
                 raise HTTPException(status_code=502, detail=str(e))
 
@@ -358,8 +370,7 @@ def get_efforts(
                 for d in DURATIONS:
                     for metric in ("hr", "cadence"):
                         val = (bests.get(metric) or {}).get(str(d))
-                        if val is not None and (result[d][metric] is None or val > result[d][metric]):
-                            result[d][metric] = val
+                        update_best(result, d, metric, val, ride.id)
             return result
 
         oldest_str = oldest.isoformat()
@@ -383,13 +394,12 @@ def get_efforts(
             for d in DURATIONS:
                 for metric in ("power", "hr", "cadence"):
                     val = (bests.get(metric) or {}).get(str(d)) if isinstance(bests, dict) else None
-                    if val is not None and (result[d][metric] is None or val > result[d][metric]):
-                        result[d][metric] = val
+                    update_best(result, d, metric, val, ride.id)
         return result
 
     # ── Course à pied ─────────────────────────────────────────────────────────
     if sport == "run":
-        result = {d: {"pace": None, "hr": None, "cadence": None} for d in DURATIONS}
+        result = {d: {"pace": cell(), "hr": cell(), "cadence": cell(), "power": cell()} for d in DURATIONS}
 
         q = db.query(Activity).filter(Activity.athlete_id == athlete_id)
         if oldest:
@@ -399,7 +409,7 @@ def get_efforts(
 
         for run in runs:
             bests = run.data.get("_run_bests")
-            if not bests:
+            if not bests or "power" not in bests:
                 try:
                     bests = client.get_activity_run_bests(run.id)
                 except Exception:
@@ -407,10 +417,9 @@ def get_efforts(
                 run.data = {**run.data, "_run_bests": bests}
                 db.commit()
             for d in DURATIONS:
-                for metric in ("pace", "hr", "cadence"):
+                for metric in ("pace", "hr", "cadence", "power"):
                     val = (bests.get(metric) or {}).get(str(d)) if isinstance(bests, dict) else None
-                    if val is not None and (result[d][metric] is None or val > result[d][metric]):
-                        result[d][metric] = val
+                    update_best(result, d, metric, val, run.id)
         return result
 
     raise HTTPException(status_code=400, detail=f"Sport inconnu : {sport}")
@@ -439,3 +448,174 @@ def get_events(
         return make_client(athlete).get_events(oldest, newest)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+# ── Configuration globale ─────────────────────────────────────────────────────
+
+DEFAULT_CONFIG = {
+    "performance": [
+        {"duration_min": 5,  "blocs": [1, 3, 5]},
+        {"duration_min": 10, "blocs": [1, 3, 5]},
+        {"duration_min": 20, "blocs": [1, 3]},
+        {"duration_min": 60, "blocs": [1]},
+    ]
+}
+
+
+@app.get("/config")
+def get_config(db: Session = Depends(get_db)):
+    row = db.get(Config, "global")
+    return row.value if row else DEFAULT_CONFIG
+
+
+@app.put("/config")
+def save_config(body: dict, db: Session = Depends(get_db)):
+    row = db.get(Config, "global")
+    if row:
+        row.value = body
+    else:
+        db.add(Config(key="global", value=body))
+    db.commit()
+    return body
+
+
+# ── Zone bests ────────────────────────────────────────────────────────────────
+
+def _best_k_blocs(stream: list, D: int, max_k: int) -> Optional[float]:
+    SEG = 30
+    n = len(stream)
+    S = round(D / SEG)
+    if S < 1 or max_k < 1:
+        return None
+    n_segs = n // SEG
+    if n_segs < S:
+        return None
+
+    arr = np.array(stream[:n_segs * SEG], dtype=np.float64)
+    seg = arr.reshape(n_segs, SEG).mean(axis=1)
+
+    K = max_k
+    NEG = -1e18
+    # dp[j, k, b] : meilleure somme avec j segments sélectionnés, k blocs démarrés, dernier sélectionné=b
+    dp = np.full((S + 1, K + 1, 2), NEG)
+    dp[0, 0, 0] = 0.0
+
+    for i in range(n_segs):
+        sv = seg[i]
+        nxt = np.full((S + 1, K + 1, 2), NEG)
+        # Skip : conserver le meilleur des deux états b
+        np.maximum(dp[:, :, 0], dp[:, :, 1], out=nxt[:, :, 0])
+        # Continuer un bloc (b=1 → b=1, j+1)
+        if S > 0:
+            np.maximum(nxt[1:, :, 1], dp[:S, :, 1] + sv, out=nxt[1:, :, 1])
+        # Démarrer un nouveau bloc (b=0, k<K → b=1, j+1, k+1)
+        if S > 0 and K > 0:
+            np.maximum(nxt[1:, 1:, 1], dp[:S, :K, 0] + sv, out=nxt[1:, 1:, 1])
+        dp = nxt
+
+    best = float(dp[S, 1:, :].max()) if K > 0 else NEG
+    return best / S if best > NEG / 2 else None
+
+
+@app.get("/athletes/{athlete_id}/zone_bests")
+def get_zone_bests(
+    athlete_id: int,
+    oldest: Optional[str] = None,
+    newest: Optional[str] = None,
+    sport: str = "ride",
+    db: Session = Depends(get_db),
+):
+    get_athlete_or_404(athlete_id, db)
+    config_row = db.get(Config, "global")
+    cfg = config_row.value if config_row else DEFAULT_CONFIG
+
+    SPORT_TYPES = {
+        "ride": ["Ride", "VirtualRide"],
+        "run":  ["Run", "Walk"],
+    }
+    allowed = SPORT_TYPES.get(sport, [])
+    METRICS = ["watts", "velocity_smooth", "heartrate"]
+
+    q = db.query(Activity).filter(Activity.athlete_id == athlete_id)
+    if oldest:
+        q = q.filter(Activity.start_date_local >= oldest)
+    if newest:
+        q = q.filter(Activity.start_date_local <= newest)
+
+    bests: dict = {}
+
+    for act in q.all():
+        if act.data.get("type") not in allowed:
+            continue
+        streams = act.data.get("_streams")
+        if not streams:
+            continue
+
+        for preset in cfg.get("performance", []):
+            dur_min = preset["duration_min"]
+            blocs_list = preset.get("blocs") or (
+                [preset["max_blocs"]] if preset.get("max_blocs") else []
+            )
+            D = round(dur_min * 60)
+
+            for nb_blocs in blocs_list:
+                pkey = f"{dur_min}_{nb_blocs}"
+                for metric in METRICS:
+                    raw = streams.get(metric) or []
+                    if not raw:
+                        continue
+                    val = _best_k_blocs(raw, D, nb_blocs)
+                    if val is None:
+                        continue
+                    prev = bests.setdefault(pkey, {}).get(metric, {}).get("value")
+                    if prev is None or val > prev:
+                        bests[pkey][metric] = {"value": val, "activity_id": act.id}
+
+    return bests
+
+
+@app.post("/athletes/{athlete_id}/fetch_streams")
+def fetch_streams_bulk(
+    athlete_id: int,
+    oldest: Optional[str] = None,
+    newest: Optional[str] = None,
+    sport: str = "ride",
+    db: Session = Depends(get_db),
+):
+    """Fetches and caches streams for all activities in the window that don't have them yet."""
+    athlete = get_athlete_or_404(athlete_id, db)
+    client = make_client(athlete)
+
+    SPORT_TYPES = {
+        "ride": ["Ride", "VirtualRide"],
+        "run":  ["Run", "Walk"],
+    }
+    allowed = SPORT_TYPES.get(sport, [])
+
+    q = db.query(Activity).filter(Activity.athlete_id == athlete_id)
+    if oldest:
+        q = q.filter(Activity.start_date_local >= oldest)
+    if newest:
+        q = q.filter(Activity.start_date_local <= newest)
+
+    fetched = 0
+    skipped = 0
+    for act in q.all():
+        if act.data.get("type") not in allowed:
+            continue
+        if act.data.get("_streams"):
+            skipped += 1
+            continue
+        try:
+            raw = client._get(
+                f"/activity/{act.id}/streams",
+                {"streams": "watts,heartrate,cadence,velocity_smooth,altitude"},
+            )
+            streams = {s["type"]: s.get("data", []) for s in (raw if isinstance(raw, list) else [])}
+            act.data = {**act.data, "_streams": streams}
+            fetched += 1
+        except Exception:
+            pass
+
+    db.commit()
+    return {"fetched": fetched, "already_cached": skipped}

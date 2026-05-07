@@ -23,62 +23,109 @@ function bestUnlimited(stream, D) {
   return { avg, blocs: ranges.length, ranges };
 }
 
-// DP : K fenêtres non-chevauchantes de taille w = floor(D/K) maximisant la somme totale
+// DP segments 30s : sélectionne S = round(D/30) segments consécutifs formant au plus K blocs
 function bestKBlocs(stream, D, maxK) {
+  const SEG = 30;
   const n = stream.length;
-  if (n < D || D < 1 || maxK < 1) return null;
+  const S = Math.round(D / SEG);
+  if (S < 1 || maxK < 1) return null;
+
+  const nSegs = Math.floor(n / SEG);
+  if (nSegs < S) return null;
+
+  const seg = new Float64Array(nSegs);
+  for (let i = 0; i < nSegs; i++) {
+    let sum = 0;
+    for (let j = i * SEG; j < (i + 1) * SEG; j++) sum += stream[j] ?? 0;
+    seg[i] = sum / SEG;
+  }
 
   const K = maxK;
-  const w = Math.floor(D / K);
-  if (w < 1 || n < K * w) return null;
-
-  const prefix = new Float64Array(n + 1);
-  for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i] + (stream[i] ?? 0);
-  const winSum = (end) => prefix[end + 1] - prefix[end - w + 1];
-
   const NEG_INF = -1e18;
-  const dp = [new Float64Array(n).fill(0)];
-  const ch = [null];
+  const W = (K + 1) * 2;
+  const si = (j, k, b) => j * W + k * 2 + b;
+  const sz = (S + 1) * W;
 
-  for (let k = 1; k <= K; k++) {
-    const dpK = new Float64Array(n).fill(NEG_INF);
-    const chK = new Uint8Array(n);
+  const dpArr = [];
+  const choiceArr = [null];
+  const d0 = new Float64Array(sz).fill(NEG_INF);
+  d0[si(0, 0, 0)] = 0;
+  dpArr.push(d0);
 
-    for (let i = 0; i < n; i++) {
-      const carry = i > 0 ? dpK[i - 1] : NEG_INF;
+  for (let i = 0; i < nSegs; i++) {
+    const cur = dpArr[i];
+    const nxt = new Float64Array(sz).fill(NEG_INF);
+    const cho = new Uint8Array(sz);   // 0=skip, 1=continue, 2=new_bloc
+    const prv = new Uint8Array(sz);   // previous b when skip
 
-      let useWindow = NEG_INF;
-      if (i >= w - 1) {
-        const prevI = i - w;
-        const prevVal = prevI >= 0 ? dp[k - 1][prevI] : (k === 1 ? 0 : NEG_INF);
-        if (prevVal > NEG_INF / 2) useWindow = prevVal + winSum(i);
-      }
+    for (let j = 0; j <= Math.min(i, S); j++) {
+      for (let k = 0; k <= Math.min(i, K); k++) {
+        for (let b = 0; b <= 1; b++) {
+          const v = cur[si(j, k, b)];
+          if (v <= NEG_INF / 2) continue;
 
-      if (useWindow >= carry) {
-        dpK[i] = useWindow;
-        chK[i] = 1;
-      } else {
-        dpK[i] = carry;
+          // Skip segment i
+          const ns0 = si(j, k, 0);
+          if (v > nxt[ns0]) { nxt[ns0] = v; cho[ns0] = 0; prv[ns0] = b; }
+
+          // Select segment i
+          if (j < S) {
+            if (b === 1) {
+              const ns1 = si(j + 1, k, 1);
+              const nv = v + seg[i];
+              if (nv > nxt[ns1]) { nxt[ns1] = nv; cho[ns1] = 1; }
+            } else if (k < K) {
+              const ns2 = si(j + 1, k + 1, 1);
+              const nv = v + seg[i];
+              if (nv > nxt[ns2]) { nxt[ns2] = nv; cho[ns2] = 2; }
+            }
+          }
+        }
       }
     }
-
-    dp.push(dpK);
-    ch.push(chK);
+    dpArr.push(nxt);
+    choiceArr.push({ cho, prv });
   }
 
-  if (dp[K][n - 1] <= NEG_INF / 2) return null;
+  const last = dpArr[nSegs];
+  let bestVal = NEG_INF, bestK = -1, bestB = -1;
+  for (let k = 1; k <= K; k++) {
+    for (let b = 0; b <= 1; b++) {
+      const v = last[si(S, k, b)];
+      if (v > bestVal) { bestVal = v; bestK = k; bestB = b; }
+    }
+  }
+  if (bestVal <= NEG_INF / 2) return null;
+
+  // Reconstruction
+  const selected = new Uint8Array(nSegs);
+  let j = S, k = bestK, b = bestB;
+  for (let i = nSegs; i >= 1; i--) {
+    const { cho, prv } = choiceArr[i];
+    const idx = si(j, k, b);
+    const act = cho[idx];
+    if (act === 0) {
+      selected[i - 1] = 0;
+      b = prv[idx];
+    } else if (act === 1) {
+      selected[i - 1] = 1;
+      j--;
+    } else {
+      selected[i - 1] = 1;
+      j--; k--;
+      b = 0;
+    }
+  }
 
   const ranges = [];
-  let i = n - 1;
-  for (let k = K; k >= 1; k--) {
-    while (i >= 0 && ch[k][i] === 0) i--;
-    if (i < 0) return null;
-    ranges.push({ start: i - w + 1, end: i });
-    i -= w;
+  let rStart = -1;
+  for (let i = 0; i < nSegs; i++) {
+    if (selected[i] === 1 && (i === 0 || selected[i - 1] === 0)) rStart = i * SEG;
+    if (selected[i] === 1 && (i === nSegs - 1 || selected[i + 1] === 0))
+      ranges.push({ start: rStart, end: (i + 1) * SEG - 1 });
   }
 
-  ranges.reverse();
-  return { avg: dp[K][n - 1] / (K * w), blocs: K, ranges, windowSecs: w };
+  return { avg: bestVal / S, blocs: ranges.length, ranges, windowSecs: null };
 }
 
 const TYPE_LABELS = {
@@ -141,6 +188,12 @@ function buildLapData(laps, isCycling) {
   });
 }
 
+const EFFORT_METRIC_DEFS = [
+  { key: "watts",           label: "Puissance", fmt: v => `${Math.round(v)} W` },
+  { key: "velocity_smooth", label: "Allure",    fmt: v => mpsToMinKm(v) ? `${mpsToMinKm(v)} /km` : "—" },
+  { key: "heartrate",       label: "FC",        fmt: v => `${Math.round(v)} bpm` },
+];
+
 const STREAM_METRICS = {
   ride: [
     { key: "watts",     label: "Puissance", unit: "W",      color: "#7c8cff", yAxis: "left" },
@@ -149,11 +202,12 @@ const STREAM_METRICS = {
     { key: "altitude",  label: "Altitude",  unit: "m",      color: "#86efac", yAxis: "left" },
   ],
   run: [
-    { key: "velocity_smooth", label: "Allure",   unit: "min/km", color: "#7c8cff", yAxis: "left",
+    { key: "velocity_smooth", label: "Allure",    unit: "min/km", color: "#7c8cff", yAxis: "left",
       transform: v => (v && v > 0) ? parseFloat((1000 / 60 / v).toFixed(2)) : null },
-    { key: "heartrate",       label: "FC",       unit: "bpm",    color: "#f97316", yAxis: "right" },
-    { key: "cadence",         label: "Cadence",  unit: "spm",    color: "#22d3ee", yAxis: "right" },
-    { key: "altitude",        label: "Altitude", unit: "m",      color: "#86efac", yAxis: "left" },
+    { key: "watts",           label: "Puissance", unit: "W",      color: "#a78bfa", yAxis: "left" },
+    { key: "heartrate",       label: "FC",        unit: "bpm",    color: "#f97316", yAxis: "right" },
+    { key: "cadence",         label: "Cadence",   unit: "spm",    color: "#22d3ee", yAxis: "right" },
+    { key: "altitude",        label: "Altitude",  unit: "m",      color: "#86efac", yAxis: "left" },
   ],
 };
 
@@ -238,6 +292,12 @@ export default function ActivityModal({ athleteId, athlete, activity, onClose })
   const [targetMinInput, setTargetMinInput] = useState(10);
   const [targetMin, setTargetMin] = useState(10);
   const [maxBlocs, setMaxBlocs] = useState(3); // null = illimité
+  const [config, setConfig] = useState(null);
+  const [effortStreamKey, setEffortStreamKey] = useState(null);
+
+  useEffect(() => {
+    api.getConfig().then(setConfig).catch(() => null);
+  }, []);
 
   // Debounce de la durée (évite un recalcul à chaque frappe)
   useEffect(() => {
@@ -245,7 +305,52 @@ export default function ActivityModal({ athleteId, athlete, activity, onClose })
     return () => clearTimeout(t);
   }, [targetMinInput]);
 
-  const effortStreamKey = isCycling ? "watts" : isRun ? "velocity_smooth" : null;
+  function applyPreset(dur, blocs) {
+    setTargetMinInput(dur);
+    setTargetMin(dur);
+    setMaxBlocs(blocs);
+  }
+
+  // Initialise la métrique d'effort dès que les streams sont disponibles
+  useEffect(() => {
+    if (!streams || !sportKey) return;
+    const defaultKey = isCycling ? "watts" : "velocity_smooth";
+    const firstAvailable = EFFORT_METRIC_DEFS.find(m => streams[m.key]?.length > 0);
+    setEffortStreamKey(prev =>
+      prev && streams[prev]?.length > 0 ? prev
+      : streams[defaultKey]?.length > 0 ? defaultKey
+      : firstAvailable?.key ?? null
+    );
+  }, [streams, sportKey]);
+
+  const availableEffortMetrics = streams
+    ? EFFORT_METRIC_DEFS.filter(m => streams[m.key]?.length > 0)
+    : [];
+
+  const allPresets = useMemo(() => {
+    if (!config?.performance) return [];
+    return config.performance
+      .filter(p => p.duration_min <= totalSecs / 60)
+      .flatMap(({ duration_min, blocs, max_blocs }) => {
+        const list = blocs?.length ? blocs : max_blocs ? [max_blocs] : [];
+        return list.map(b => ({ duration_min, blocs: b }));
+      });
+  }, [config, totalSecs]);
+
+  const zoneResults = useMemo(() => {
+    if (!streams || !allPresets.length) return {};
+    const out = {};
+    for (const def of EFFORT_METRIC_DEFS) {
+      const stream = streams[def.key];
+      if (!stream?.length) continue;
+      out[def.key] = {};
+      for (const { duration_min, blocs } of allPresets) {
+        const D = Math.round(duration_min * 60);
+        out[def.key][`${duration_min}_${blocs}`] = bestKBlocs(stream, D, blocs);
+      }
+    }
+    return out;
+  }, [streams, allPresets]);
 
   const effortResult = useMemo(() => {
     if (!streams || !effortStreamKey) return null;
@@ -256,9 +361,29 @@ export default function ActivityModal({ athleteId, athlete, activity, onClose })
     return bestKBlocs(stream, D, maxBlocs);
   }, [streams, effortStreamKey, targetMin, maxBlocs]);
 
+  const blocStats = useMemo(() => {
+    if (!effortResult?.ranges?.length || !streams?.[effortStreamKey]) return null;
+    const stream = streams[effortStreamKey];
+    return effortResult.ranges.map(({ start, end }) => {
+      const slice = [];
+      for (let i = start; i <= end && i < stream.length; i++) {
+        const v = stream[i];
+        if (v != null && v > 0) slice.push(v);
+      }
+      if (!slice.length) return null;
+      const avg = slice.reduce((s, v) => s + v, 0) / slice.length;
+      const max = slice.reduce((a, v) => Math.max(a, v), -Infinity);
+      const min = slice.reduce((a, v) => Math.min(a, v), Infinity);
+      return { start, end, dur: end - start + 1, avg, max, min };
+    }).filter(Boolean);
+  }, [effortResult, streams, effortStreamKey]);
+
+  const selectedEffortDef = EFFORT_METRIC_DEFS.find(m => m.key === effortStreamKey);
+  const fmtMetric = selectedEffortDef ? selectedEffortDef.fmt : v => `${Math.round(v)}`;
+
   function tooltipFormatter(value, name) {
-    const m = metricConfigs.find(c => c.key === name);
-    if (!m || value == null) return ["-", m?.label ?? name];
+    const m = metricConfigs.find(c => c.label === name);
+    if (!m || value == null) return ["-", name];
     if (m.key === "velocity_smooth") {
       const min = Math.floor(value);
       const sec = Math.round((value - min) * 60);
@@ -310,12 +435,56 @@ export default function ActivityModal({ athleteId, athlete, activity, onClose })
             {/* Meilleur effort non-consécutif — panneau interactif */}
             {effortStreamKey && (
               <div className="nonconsec-section">
+                {/* 1. Sélecteur de métrique */}
+                {availableEffortMetrics.length > 1 && (
+                  <div className="nonconsec-metric-row">
+                    <span className="nonconsec-presets-label">Métrique</span>
+                    <div className="nonconsec-pills">
+                      {availableEffortMetrics.map(m => (
+                        <button
+                          key={m.key}
+                          className={`nonconsec-pill${effortStreamKey === m.key ? " active" : ""}`}
+                          onClick={() => setEffortStreamKey(m.key)}
+                        >{m.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Préréglages depuis la config admin */}
+                {config?.performance?.filter(p => p.duration_min <= totalSecs / 60).length > 0 && (
+                  <div className="nonconsec-presets">
+                    <span className="nonconsec-presets-label">Préréglages</span>
+                    <div className="nonconsec-presets-grid">
+                      {config.performance
+                        .filter(p => p.duration_min <= totalSecs / 60)
+                        .map(({ duration_min, blocs }) => (
+                          <div key={duration_min} className="nonconsec-presets-row">
+                            <span className="nonconsec-preset-dur">{duration_min} min</span>
+                            <div className="nonconsec-presets-pills">
+                              {(blocs ?? []).map(b => (
+                                <button
+                                  key={b}
+                                  className={`nonconsec-preset-pill${targetMin === duration_min && maxBlocs === b ? " active" : ""}`}
+                                  onClick={() => applyPreset(duration_min, b)}
+                                >
+                                  {b} bloc{b > 1 ? "s" : ""}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+                )}
+
                 <div className="nonconsec-controls">
                   <div className="nonconsec-ctrl">
-                    <label className="nonconsec-ctrl-label">Durée cible</label>
+                    <label className="nonconsec-ctrl-label">Durée</label>
                     <div className="nonconsec-input-row">
                       <input
-                        type="number" min="1" max="120"
+                        type="number" min="1" max="240"
                         value={targetMinInput}
                         onChange={e => setTargetMinInput(Math.max(1, parseInt(e.target.value) || 1))}
                         className="nonconsec-num-input"
@@ -324,15 +493,18 @@ export default function ActivityModal({ athleteId, athlete, activity, onClose })
                     </div>
                   </div>
                   <div className="nonconsec-ctrl">
-                    <label className="nonconsec-ctrl-label">Max intervalles</label>
-                    <div className="nonconsec-pills">
-                      {[1, 2, 3, 5, 10].map(k => (
-                        <button
-                          key={k}
-                          className={`nonconsec-pill${maxBlocs === k ? " active" : ""}`}
-                          onClick={() => setMaxBlocs(k)}
-                        >{k}</button>
-                      ))}
+                    <label className="nonconsec-ctrl-label">Blocs</label>
+                    <div className="nonconsec-blocs-row">
+                      <input
+                        type="number" min="1"
+                        value={maxBlocs ?? ""}
+                        placeholder="N"
+                        onChange={e => {
+                          const v = parseInt(e.target.value);
+                          if (v > 0) setMaxBlocs(v);
+                        }}
+                        className="nonconsec-num-input"
+                      />
                       <button
                         className={`nonconsec-pill${maxBlocs === null ? " active" : ""}`}
                         onClick={() => setMaxBlocs(null)}
@@ -352,23 +524,59 @@ export default function ActivityModal({ athleteId, athlete, activity, onClose })
                     {effortResult != null && (
                       <>
                         <span className="nonconsec-main-value">
-                          {isCycling
-                            ? `${Math.round(effortResult.avg)} W`
-                            : mpsToMinKm(effortResult.avg)
-                              ? `${mpsToMinKm(effortResult.avg)} /km`
-                              : "—"
-                          }
+                          {fmtMetric(effortResult.avg)}
                         </span>
                         <span className="nonconsec-detail">
                           {effortResult.blocs} bloc{effortResult.blocs > 1 ? "s" : ""}
-                          {effortResult.windowSecs && effortResult.blocs > 1
-                            ? ` × ${fmtTime(effortResult.windowSecs)}`
-                            : ""}
+                          {effortResult.blocs > 1 && effortResult.ranges && (() => {
+                            const durs = effortResult.ranges.map(r => r.end - r.start + 1);
+                            const allSame = durs.every(d => d === durs[0]);
+                            if (allSame) return ` × ${fmtTime(durs[0])}`;
+                            if (durs.length <= 4) return ` (${durs.map(fmtTime).join(", ")})`;
+                            return ` (variable)`;
+                          })()}
                           {maxBlocs === null ? " (illimité)" : ""}
                         </span>
                       </>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Zones de travail */}
+            {allPresets.length > 0 && streams && (
+              <div className="zones-section">
+                <h3 className="zones-title">Zones de travail</h3>
+                <div className="zones-table-wrap">
+                  <table className="zones-table">
+                    <thead>
+                      <tr>
+                        <th></th>
+                        {allPresets.map(({ duration_min, blocs }) => (
+                          <th key={`${duration_min}_${blocs}`}>
+                            <span className="zones-th-dur">{duration_min} min</span>
+                            <span className="zones-th-blocs">× {blocs}</span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {availableEffortMetrics.map(def => (
+                        <tr key={def.key}>
+                          <td className="zones-row-label">{def.label}</td>
+                          {allPresets.map(({ duration_min, blocs }) => {
+                            const r = zoneResults[def.key]?.[`${duration_min}_${blocs}`];
+                            return (
+                              <td key={`${duration_min}_${blocs}`} className="zones-cell">
+                                {r ? def.fmt(r.avg) : "—"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -399,7 +607,7 @@ export default function ActivityModal({ athleteId, athlete, activity, onClose })
                   <p className="stats-hint">Données de stream non disponibles pour cette activité.</p>
                 )}
                 {chartData.length > 0 && (
-                  <ResponsiveContainer width="100%" height={240}>
+                  <ResponsiveContainer width="100%" height={320}>
                     <LineChart data={chartData} margin={{ top: 4, right: hasRightAxis ? 8 : 16, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis
@@ -465,6 +673,36 @@ export default function ActivityModal({ athleteId, athlete, activity, onClose })
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
+                )}
+                {blocStats?.length > 0 && (
+                  <div className="bloc-table-wrap">
+                    <table className="bloc-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Début</th>
+                          <th>Fin</th>
+                          <th>Durée</th>
+                          <th>Moy.</th>
+                          <th>Max</th>
+                          <th>Min</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {blocStats.map((b, i) => (
+                          <tr key={i}>
+                            <td>{i + 1}</td>
+                            <td>{fmtTime(b.start)}</td>
+                            <td>{fmtTime(b.end)}</td>
+                            <td>{fmtTime(b.dur)}</td>
+                            <td className="bloc-td-main">{fmtMetric(b.avg)}</td>
+                            <td>{fmtMetric(b.max)}</td>
+                            <td>{fmtMetric(b.min)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )}

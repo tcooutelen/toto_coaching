@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import AthleteDetail from "./components/AthleteDetail";
 import AddAthleteModal from "./components/AddAthleteModal";
 import EditAthleteModal from "./components/EditAthleteModal";
+import ConfigPanel from "./components/ConfigPanel";
 import { api } from "./api";
 import "./App.css";
 
@@ -10,6 +11,7 @@ export default function App() {
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [showConfig, setShowConfig] = useState(false);
 
   useEffect(() => {
     api.getAthletes().then(setAthletes).catch(console.error);
@@ -43,7 +45,10 @@ export default function App() {
   return (
     <div className="app">
       <aside className="left-panel">
-        <div className="panel-title">TotoCoaching</div>
+        <div className="panel-title">
+          TotoCoaching
+          <button className="btn-config" title="Configuration" onClick={() => setShowConfig(true)}>⚙</button>
+        </div>
 
         <div className="athlete-selector">
           <select value={selected?.id ?? ""} onChange={handleSelect}>
@@ -101,6 +106,9 @@ export default function App() {
           onSave={handleEdit}
           onClose={() => setEditing(null)}
         />
+      )}
+      {showConfig && (
+        <ConfigPanel onClose={() => setShowConfig(false)} />
       )}
     </div>
   );

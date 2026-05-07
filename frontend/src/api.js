@@ -53,4 +53,26 @@ export const api = {
     return req(`/athletes/${id}/wellness?${params}`);
   },
   getEvents: (id) => req(`/athletes/${id}/events`),
+  getProfile: (id) => req(`/athletes/${id}/profile`),
+  fetchStreams: (id, oldest, newest, sport = "ride") => {
+    const params = new URLSearchParams();
+    params.set("sport", sport);
+    if (oldest) params.set("oldest", oldest);
+    if (newest) params.set("newest", newest);
+    return req(`/athletes/${id}/fetch_streams?${params}`, { method: "POST" });
+  },
+  getZoneBests: (id, oldest, newest, sport = "ride") => {
+    const params = new URLSearchParams();
+    params.set("sport", sport);
+    if (oldest) params.set("oldest", oldest);
+    if (newest) params.set("newest", newest);
+    return req(`/athletes/${id}/zone_bests?${params}`);
+  },
+  getConfig: () => req("/config"),
+  saveConfig: (data) =>
+    req("/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
 };

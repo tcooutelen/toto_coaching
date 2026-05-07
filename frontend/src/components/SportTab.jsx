@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import ActivityList from "./ActivityList";
 import EffortsTable from "./EffortsTable";
+import ZonesTable from "./ZonesTable";
 
 const PERIODS = [
   { key: "7j",     label: "7 jours",  getDays: () => 7 },
@@ -127,10 +128,20 @@ export default function SportTab({ sport, activities, athlete, athleteId, syncKe
       </div>
 
       {sport.id === "velo" && (
-        <EffortsTable athleteId={athleteId} athlete={athlete} syncKey={syncKey} sport="ride" />
+        <EffortsTable athleteId={athleteId} athlete={athlete} syncKey={syncKey} sport="ride" activities={sportActivities} />
       )}
       {sport.id === "course" && (
-        <EffortsTable athleteId={athleteId} athlete={athlete} syncKey={syncKey} sport="run" />
+        <EffortsTable athleteId={athleteId} athlete={athlete} syncKey={syncKey} sport="run" activities={sportActivities} />
+      )}
+
+      {(sport.id === "velo" || sport.id === "course") && (
+        <ZonesTable
+          athleteId={athleteId}
+          athlete={athlete}
+          sport={sport.id === "velo" ? "ride" : "run"}
+          syncKey={syncKey}
+          activities={sportActivities}
+        />
       )}
 
       <div className="sport-activity-list">
